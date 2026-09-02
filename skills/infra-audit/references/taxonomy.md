@@ -286,6 +286,16 @@ escalates privileges.
 8. **Read the project's own rules before flagging a convention.** What looks
    sloppy may be a documented trade-off; what looks fine may violate a rule
    the project wrote for itself, which makes it a finding rather than taste.
+9. **A DNS answer from a local resolver is not the zone's answer.** A
+   recursive resolver keeps serving what it cached until the TTL expires:
+   3362 s was observed on a record deleted minutes earlier. Ask the zone's own
+   nameserver, taken from its `NS` record - an empty answer there is the
+   deletion, and a non-empty local answer afterwards is propagation, not
+   failure. `collect-dns.sh` resolves the nameserver and routes every lookup
+   to it; a lookup you type by hand needs the `@ns` yourself. The same trap
+   runs backwards, and that is the costly direction: reporting a record as
+   still published when the owner already removed it sends them chasing a
+   finding that no longer exists.
 
 ## Writing a finding
 
