@@ -35,12 +35,14 @@ def merge(old, new, today):
     old_by_key = {key_of(f): f for f in old.get("findings", [])}
     new_by_key = {key_of(f): f for f in new.get("findings", [])}
 
-    merged, report = [], {"kept": [], "new": [], "regressed": [], "unseen": []}
+    merged, report = [], {"kept": [], "new": [], "regressed": [], "unseen": [],
+                      "renumbered": [], "reordered": False}
 
     for k, nf in new_by_key.items():
         of = old_by_key.get(k)
         if of is None:
             nf.setdefault("status", "todo")
+            nf["_incumbent"] = False
             nf["notes"] = (nf.get("notes") or "") + f" [Nouveau constat, {today}.]"
             merged.append(nf)
             report["new"].append(nf.get("title", k))
@@ -48,7 +50,7 @@ def merge(old, new, today):
 
         # Refresh the observed facts, keep the human follow-up.
         keep = {kk: of.get(kk) for kk in ("status", "notes", "order") if kk in of}
-        out = {**of, **nf, **keep}
+        out = {**of, **nf, **keep, "_incumbent": True}
 
         if of.get("status") == "fixed":
             out["status"] = "todo"
@@ -76,11 +78,52 @@ def merge(old, new, today):
                 "l'absence dans une passe ne prouve pas la correction.]"
             )
             report["unseen"].append(of.get("title", k))
+        of["_incumbent"] = True
         merged.append(of)
 
-    merged.sort(key=lambda f: (f.get("order", 999), str(f.get("id", ""))))
+    # At an equal rank the finding that was already in the report comes first:
+    # a newcomer arriving with `order: 1` must not displace the plan's own
+    # first item.
+    merged.sort(key=lambda f: (f.get("order", 999),
+                               0 if f.get("_incumbent") else 1,
+                               str(f.get("id", ""))))
+
+    # Two identifiers must be unique across the whole report, and neither is
+    # safe to take from the incoming pass: a pass written on its own numbers
+    # its findings from F1 and orders them from 1, so anything new arrives
+    # holding an id and a rank that the existing report has already given to
+    # something else. Left alone, that ships a report with two findings called
+    # F2 and two rows both labelled #3 - which is exactly what happened on the
+    # run that produced this code. A finding already in the report keeps what
+    # it has; a colliding newcomer is reassigned.
+    # Incumbents reserve their ids first, unconditionally: the owner refers to a
+    # finding by its id, in notes, in a ticket, out loud. Only a newcomer is
+    # ever renamed, and only when the id it brought is already spoken for.
+    taken = {f["id"] for f in merged if f.get("_incumbent") and f.get("id")}
+    for f in merged:
+        if f.get("_incumbent") and f.get("id"):
+            continue
+        fid = f.get("id")
+        if not fid or fid in taken:
+            n = 1
+            while f"F{n}" in taken:
+                n += 1
+            fid = f"F{n}"
+            if f.get("id"):
+                report["renumbered"].append(f"{f['id']} -> {fid}  {f.get('title','')}")
+            f["id"] = fid
+        taken.add(fid)
+
+    # Ranks become unique and contiguous, keeping the sequence above. `order`
+    # is a plan, so only a human decides where a new finding really belongs:
+    # this guarantees the report is readable, not that the plan is right.
+    reordered = any(f.get("order") != i for i, f in enumerate(merged, 1))
     for i, f in enumerate(merged, 1):
-        f.setdefault("id", f"F{i}")
+        f["order"] = i
+    if reordered:
+        report["reordered"] = True
+    for f in merged:
+        f.pop("_incumbent", None)
 
     out_doc = {**old, **{kk: vv for kk, vv in new.items() if kk != "findings"}}
     out_doc["findings"] = merged
@@ -119,6 +162,7 @@ def main():
     print(f"merged: {out}  ({len(merged['findings'])} findings)")
     for label, items in (("REGRESSED", rep["regressed"]), ("new", rep["new"]),
                          ("not observed this pass", rep["unseen"]),
+                         ("new finding renamed to free an id", rep["renumbered"]),
                          ("carried over", rep["kept"])):
         if items:
             print(f"\n{label} ({len(items)}):")
@@ -126,6 +170,9 @@ def main():
                 print(f"  - {i}")
     if rep["regressed"]:
         print("\nA regression outranks a new finding: something that was fixed came back.")
+    if rep["reordered"]:
+        print("\nRanks were made unique and contiguous. `order` is the action plan, not the\n"
+              "severity ranking, so review where the new findings landed before acting on it.")
     print("\nNow re-render: render-report.py " + str(out))
 
 
