@@ -70,7 +70,7 @@ conventions, so the audit is meaningfully weaker without it:
 | `collect-stack.sh` | **yes** - compose files, Dockerfiles, lockfiles |
 | `collect-pipeline.sh` | **yes** - `.github/workflows` |
 | `collect-drift.sh` | **yes** - it diffs the versioned config against the deployed one |
-| `collect-host.sh`, `collect-web.sh`, `collect-dns.sh`, `collect-compromise.sh` | no - SSH and network only |
+| `collect-host.sh`, `collect-web.sh`, `collect-dns.sh`, `collect-logs.sh`, `collect-compromise.sh` | no - SSH and network only |
 
 **Auditing a server with no repository at hand** (someone else's box, a
 machine whose code you do not have) works: the repo-side collectors report
@@ -105,6 +105,7 @@ scripts/collect-stack.sh                    # declared images/tags, port binding
 scripts/collect-dns.sh        example.com   # records, dangling CNAME candidates, SPF/DKIM/DMARC
 scripts/collect-pipeline.sh                 # CI triggers, unpinned actions, runner type, prod credentials
 scripts/collect-drift.sh      root@host     # versioned config vs what is deployed
+scripts/collect-logs.sh       root@host [lines] # what the logs already witnessed: probes, auth hits, sources
 scripts/collect-compromise.sh root@host [date]   # only in compromised-host mode
 ```
 
@@ -121,6 +122,13 @@ Enumerate what actually exists, then interrogate each item:
 
 - every **listening port**, every **vhost**, every **container**, every
   **scheduled job**, every **credential**, every **inbound path**
+- and then read what the logs say was already **tried** against each of them:
+  `collect-logs.sh` aggregates that on the host and returns counts only, never
+  log lines. Probe traffic is constant background noise on any public address,
+  so volume is not a finding. What raises a finding's rank is the crossing:
+  an endpoint that is both reachable AND actively hit outranks one that is
+  merely reachable, and an auth path being hammered with no quota in front of
+  it is a different item from the same path sitting quiet.
 - for each one, ask:
   - who can reach this **without credentials**?
   - what credential does it hold, and **what does that credential reach**?

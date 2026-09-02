@@ -154,6 +154,7 @@ skills/infra-audit/
   scripts/collect-dns.sh           records, dangling CNAMEs, SPF/DKIM/DMARC, certificate transparency
   scripts/collect-pipeline.sh      CI triggers, unpinned actions, runner type, production credentials
   scripts/collect-drift.sh         versioned config vs what is actually deployed
+  scripts/collect-logs.sh          what the logs witnessed: probes, auth hits, sources, served files
   scripts/collect-compromise.sh    read-only intrusion triage
   scripts/render-report.py         findings.json -> HTML
   scripts/merge-findings.py        merge a new pass, keep the follow-up, flag regressions
