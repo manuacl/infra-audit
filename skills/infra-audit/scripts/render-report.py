@@ -5,7 +5,7 @@ The JSON is the source of truth. Fix something, change that finding's status,
 re-run this: the report is regenerated and the progress bar moves. Never edit
 the HTML by hand, it is overwritten.
 
-Usage: render-report.py <findings.json> [--no-open]
+Usage: render-report.py <findings.json> [--open | --no-open]
 """
 import json
 import subprocess
@@ -103,6 +103,11 @@ border-radius:9px;padding:18px 22px;margin:16px 0}
 .card.st-fixed{opacity:.62;border-left-color:var(--ok)}
 .card.st-fixed h3{text-decoration:line-through;text-decoration-color:var(--dim)}
 .card.st-accepted{opacity:.68;border-left-style:dashed;border-left-color:var(--dim)}
+.sep{display:flex;align-items:center;gap:14px;margin:40px 0 6px;color:var(--dim);
+font:600 12px/1 var(--mono);letter-spacing:1.6px;text-transform:uppercase}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+.navsep{margin:16px 0 6px;padding:0 10px;color:var(--dim);
+font:600 10px/1 var(--mono);letter-spacing:1.4px;text-transform:uppercase}
 .card.st-fixed pre,.card.st-accepted pre{opacity:.75}
 .card.st-fixed:hover,.card.st-accepted:hover{opacity:1}
 nav a.st-fixed .nm{text-decoration:line-through;opacity:.5}
@@ -170,14 +175,9 @@ def lint_plan(findings):
                 f"({first.get('severity')}). The action list is titled most-urgent-first: either "
                 f"move it up, or say why in meta.order_note - it renders in the report.")
 
-    settled_above = [f for f in ordered
-                     if f.get("status") in SETTLED and active
-                     and f.get("order", 999) < active[-1].get("order", 999)]
-    if len(settled_above) > 1:
-        warnings.append(
-            f"{len(settled_above)} settled findings are ranked among the open ones "
-            f"({', '.join(str(f.get('id')) for f in settled_above)}). Closed work is history: "
-            f"keeping it in the middle of the plan pushes live items down the page.")
+    # Settled findings interleaved with open ones used to be warned about here.
+    # They are not any more: render() now sinks them to the bottom on its own,
+    # so the author no longer has to keep `order` free of closed work.
     return warnings
 
 
@@ -185,7 +185,14 @@ def render(data, out_path):
     meta = data.get("meta", {})
     findings = list(data.get("findings", []))
     sev_rank = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
-    findings.sort(key=lambda f: (f.get("order", 999),
+    # Settled work sinks to the bottom, whatever its rank: the plan is read for
+    # what is left to do, and a fixed item sitting at #1 pushes live findings
+    # off the first screen. Within each group `order` still decides, so the
+    # settled block keeps the priority order it was closed in - the rank badge
+    # keeps its original number rather than being renumbered, which is why the
+    # open list can legitimately start at #2.
+    findings.sort(key=lambda f: (0 if f.get("status") in ACTIVE else 1,
+                                 f.get("order", 999),
                                  sev_rank.get(f.get("severity", "P4"), 9),
                                  str(f.get("id", ""))))
 
@@ -245,7 +252,12 @@ def render(data, out_path):
                "todo": "p-n", "accepted": "p-n"}
 
     nav, cards = [], []
+    settled_started = False
     for f in findings:
+        if not settled_started and f.get("status") in SETTLED:
+            settled_started = True
+            nav.append('<div class="navsep">Déjà traité</div>')
+            cards.append('<div class="sep"><span>Déjà traité</span></div>')
         fid = escape(str(f.get("id", "")))
         sev = f.get("severity", "P4")
         sev_lab, _ = SEV.get(sev, SEV["P4"])
@@ -366,6 +378,32 @@ document.getElementById("cp").addEventListener("click", function(){{
     setTimeout(function(){{ b.textContent = "Copier l'état comme prompt"; }}, 1800);
   }});
 }});
+
+// The report is re-rendered in place after every status change, and the owner
+// keeps the same tab open across a whole fix session. A file:// page cannot
+// fetch itself to check for a change (CORS blocks it), so it reloads on its
+// own schedule: on coming back to the tab, and slowly while it is being read.
+// Scroll position is carried across so the reload is invisible.
+(function(){{
+  var KEY = "infra-audit-scroll";
+  try {{
+    var y = sessionStorage.getItem(KEY);
+    if (y !== null) window.scrollTo(0, parseInt(y, 10));
+  }} catch (e) {{}}
+
+  function reload() {{
+    // Never yank the page out from under a selection or an open dialog.
+    var sel = window.getSelection();
+    if (sel && String(sel).length) return;
+    try {{ sessionStorage.setItem(KEY, String(window.scrollY)); }} catch (e) {{}}
+    location.reload();
+  }}
+
+  document.addEventListener("visibilitychange", function(){{
+    if (!document.hidden) reload();
+  }});
+  setInterval(function(){{ if (!document.hidden) reload(); }}, 10000);
+}})();
 </script>
 </body></html>"""
     out_path.write_text(html, encoding="utf-8")
@@ -384,20 +422,32 @@ def open_browser(path):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "--no-open"]
+    flags = {"--no-open", "--open"}
+    args = [a for a in sys.argv[1:] if a not in flags]
     if not args:
         print(__doc__)
         sys.exit(1)
     src = Path(args[0]).expanduser()
     data = json.loads(src.read_text(encoding="utf-8"))
     out = src.with_suffix(".html")
+    # Whether the report already existed decides whether to open a tab. A fix
+    # session re-renders after every status change, and each of those spawning
+    # a new tab buries the one the owner is reading. The page reloads itself
+    # instead (see the script at the end of the template), so re-rendering in
+    # place is enough. --open forces a new tab anyway.
+    existed = out.exists()
     out, done, total, p1 = render(data, out)
     print(f"report: {out}")
     print(f"progress: {done}/{total} fixed, {p1} P1 still open")
     for w in lint_plan(data.get("findings", [])):
         print(f"plan: {w}", file=sys.stderr)
-    if "--no-open" not in sys.argv:
-        open_browser(out) or print("(no browser opener found, open the file manually)")
+    force = "--open" in sys.argv
+    if "--no-open" in sys.argv:
+        return
+    if existed and not force:
+        print("(updated in place; the open tab reloads itself, --open forces a new one)")
+        return
+    open_browser(out) or print("(no browser opener found, open the file manually)")
 
 
 if __name__ == "__main__":

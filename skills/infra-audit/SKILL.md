@@ -183,8 +183,15 @@ The report is a **state file plus a generator**, never hand-written HTML.
    ```bash
    python3 scripts/render-report.py <path>/findings.json
    ```
-   It writes the HTML beside the JSON, opens it in the browser, and prints the
-   progress line.
+   It writes the HTML beside the JSON, opens it in the browser the first time,
+   and prints the progress line. Later renders do **not** open a second tab:
+   the page reloads itself when the owner comes back to it, so a fix session
+   can re-render after every status change without burying the tab they are
+   reading. `--open` forces a new tab, `--no-open` opens none.
+
+   Settled findings render at the bottom, keeping the rank they were closed
+   at. The plan is read for what is left to do, and the rank badge is never
+   renumbered - so an open list legitimately starts at `#2`.
 
 **The action list runs most urgent first, and settled findings go last.**
 `order` drives it, and the section is titled "de la plus urgente a la moins",

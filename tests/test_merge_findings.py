@@ -9,6 +9,7 @@ produced a wrong report, not because a rule said to write tests.
 """
 import json
 import sys
+import re
 import tempfile
 from pathlib import Path
 
@@ -167,17 +168,39 @@ def test_plan_lint_catches_a_buried_p1():
     check("silent once the P1 leads", rr.lint_plan(findings) == [], rr.lint_plan(findings))
 
 
-def test_plan_lint_catches_settled_work_among_open_work():
-    """Closed findings ranked among live ones push real work down the page."""
+def test_render_sinks_settled_work_to_the_bottom():
+    """Closed findings render last, in the priority order they were closed in.
+
+    The generator does this rather than warning the author about it: a fix
+    session closes items in whatever order the plan dictates, and the report
+    is read for what is left. The rank badge is NOT renumbered, so a settled
+    #1 keeps its number at the bottom and the open list starts at #2.
+    """
     findings = [
-        finding("F1", "a", 1, status="fixed", severity="P1"),
-        finding("F2", "b", 2, status="fixed", severity="P2"),
-        finding("F3", "c", 3, severity="P3"),
-        finding("F4", "d", 4, severity="P3"),
+        finding("F1", "closed first", 1, status="fixed", severity="P1"),
+        finding("F2", "still open", 2, severity="P2"),
+        finding("F3", "accepted", 3, status="accepted", severity="P3"),
+        finding("F4", "open too", 4, severity="P3"),
     ]
-    warns = rr.lint_plan(findings)
-    check("settled ranked above open is flagged",
-          any("settled findings are ranked" in w for w in warns), warns)
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "r.html"
+        rr.render({"meta": {}, "findings": findings}, out)
+        html = out.read_text(encoding="utf-8")
+
+    ranks = re.findall(r'class="ord">#(\d+)', html)
+    check("open findings come first, settled last", ranks == ["2", "4", "1", "3"], ranks)
+
+    # Anchor on the rank badge, not on the bare "#1": the stylesheet is full
+    # of hex colours and html.index("#2") lands in the CSS block.
+    sep = html.index('class="sep"')
+    first_open = html.index('class="ord">#2')
+    first_settled = html.index('class="ord">#1')
+    check("the divider sits between the two groups",
+          first_open < sep < first_settled, (first_open, sep, first_settled))
+
+    # Ranks are the author's, not the renderer's: renumbering them would erase
+    # where a closed finding stood when it mattered.
+    check("ranks are not renumbered", "#1" in html and "#3" in html, ranks)
 
 
 def main():
