@@ -1,0 +1,20 @@
+{
+  "name": "infra-audit",
+  "description": "Read-only security audit of a deployed server: host, firewall, reverse proxy, containers, datastore roles, DNS, deployment pipeline and the HTTP surface as actually served. Produces an evidence-backed HTML report with an ordered fix plan, and a separate mode for a host that may already be compromised.",
+  "version": "0.1.0",
+  "author": {
+    "name": "manuacl",
+    "url": "https://github.com/manuacl"
+  },
+  "homepage": "https://github.com/manuacl/infra-audit",
+  "repository": "https://github.com/manuacl/infra-audit",
+  "license": "MIT",
+  "keywords": [
+    "security",
+    "audit",
+    "infrastructure",
+    "hardening",
+    "devops",
+    "incident-response"
+  ]
+}

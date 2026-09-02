@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "target": "example.app (VPS Hetzner, Docker Compose)",
+    "date": "2026-09-02",
+    "summary": "La couche applicative est solide et l'hôte correctement durci. Les constats portent sur le cloisonnement entre services : ce qui est bien protégé, c'est l'app ; ce qui l'est moins, ce sont les outils qui partagent sa machine et sa base."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "order": 1,
+      "severity": "P2",
+      "category": "Surface exposée inutile",
+      "status": "todo",
+      "title": "Le dashboard analytics est exposé publiquement",
+      "evidence": "$ curl -o /dev/null -w \"%{http_code}\" https://radar.example.app/login\n200",
+      "impact": "Page de connexion par mot de passe, sans limite de tentatives ni jail fail2ban, sur une IP scannée en continu. Rien dans l'application n'en dépend : le tracking passe par /script.js et /api/send en même origine, ce vhost ne sert que le tableau de bord.",
+      "correction": "Supprimer le vhost du reverse proxy et publier le dashboard sur le réseau privé (tailscale serve, VPN, ou allowlist IP). Retirer ensuite les mentions devenues inutiles dans la CSP.",
+      "cost": "Faible. Aucune migration, aucun redémarrage de la base. Réversible en une ligne.",
+      "constraint": "Vérifier avant suppression qu'aucun script client ne charge depuis ce sous-domaine.",
+      "notes": ""
+    },
+    {
+      "id": "F2",
+      "order": 2,
+      "severity": "P3",
+      "category": "Quota manquant au bord",
+      "status": "todo",
+      "title": "Aucune limite de débit sur l'endpoint d'envoi d'email",
+      "evidence": "$ for i in $(seq 10); do curl -o /dev/null -w '%{http_code} ' https://example.app/auth/magic-link -d '{\"email\":\"x@y.z\"}'; done\n200 200 200 200 200 200 200 200 200 200",
+      "impact": "Non authentifié, sans limite, envoie un mail à n'importe quelle adresse fournie. Permet de bombarder un tiers depuis le domaine, de brûler le quota du fournisseur et d'abîmer la réputation d'envoi, qui est lente à réparer.",
+      "correction": "Limite par IP au niveau du proxy, ET compteur par adresse email côté application : des IP tournantes passent sous une limite par IP.",
+      "cost": "Faible, mais touche deux couches.",
+      "constraint": "La réponse doit rester indistinguable qu'un compte existe ou non. Un 429 différencié réintroduirait l'énumération de comptes.",
+      "notes": ""
+    },
+    {
+      "id": "F3",
+      "order": 3,
+      "severity": "P4",
+      "category": "Dépendances et images",
+      "status": "todo",
+      "title": "Tag d'image flottant en production",
+      "evidence": "docker-compose.yml:118  image: sonarqube:community\n$ docker ps --format '{{.Image}}'\nsonarqube:community",
+      "impact": "La version déployée est illisible depuis le dépôt et dérive silencieusement à chaque pull. Un déploiement peut alors lancer, sans surveillance, les migrations de schéma d'une version que personne n'a choisie.",
+      "correction": "Relever la version réellement en cours d'exécution et épingler exactement celle-là.",
+      "cost": "Nul en termes de migration : épingler sur la version déjà active ne change aucune version. Bref redémarrage du service.",
+      "constraint": "Ne jamais épingler vers une version plus récente dans le même changement : ce serait une migration déguisée.",
+      "notes": ""
+    },
+    {
+      "id": "F4",
+      "order": 4,
+      "severity": "P1",
+      "category": "Cloisonnement et privilèges",
+      "status": "todo",
+      "title": "Un rôle Postgres superuser unique partagé par trois services",
+      "evidence": "$ psql -tAc \"select usename, usesuper from pg_user\"\nappuser|t\n$ psql -tAc \"select datname from pg_database\"\napp / analytics / codequality",
+      "impact": "Les deux outils tiers sont exposés et mis à jour indépendamment de l'application. Aujourd'hui une vulnérabilité dans l'un d'eux ne donne pas accès à ses seules données : elle donne un accès superuser à la base qui contient les comptes, les sessions et les emails. Le rayon d'impact d'un incident tiers est maximal alors qu'il pourrait être nul.",
+      "correction": "Un rôle dédié non-superuser par base, propriétaire de sa seule base. Réattribuer la propriété des objets, basculer les chaînes de connexion, révoquer CONNECT sur les bases croisées.",
+      "cost": "Migration de production. Dump préalable, fenêtre de maintenance, vérification des logs après bascule. Carte dédiée, jamais embarquée dans une branche de fonctionnalité.",
+      "constraint": "Les migrations applicatives doivent continuer de tourner : le nouveau rôle a besoin des droits DDL sur sa propre base.",
+      "notes": ""
+    }
+  ],
+  "already_in_place": [
+    "Pare-feu en refus par défaut, seuls 22/80/443 ouverts",
+    "SSH par clé uniquement, mot de passe désactivé",
+    "Mises à jour de sécurité automatiques actives",
+    "Tous les ports Docker liés à 127.0.0.1",
+    "CSP appliquée, HSTS preload, nosniff",
+    "Secrets sur disque en mode 600",
+    "Sauvegardes en modèle pull, le serveur n'a aucun accès sortant"
+  ],
+  "accepted_risks": [
+    "Pas de CDN ni de WAF devant l'origine : à cette échelle, la complexité ajoutée dépasse le risque. À revoir si le trafic augmente.",
+    "Pas de jeton anti-CSRF : SameSite=Lax suffit pour une API JSON dont toutes les mutations sont en application/json."
+  ],
+  "not_covered": [
+    "Revue ligne à ligne du code serveur (couverte par le plugin claude-security)",
+    "Sécurité du poste de développement",
+    "Comptes des fournisseurs OAuth et email",
+    "Restauration effective des sauvegardes"
+  ]
+}

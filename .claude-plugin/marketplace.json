@@ -1,0 +1,18 @@
+{
+  "name": "infra-audit",
+  "owner": {
+    "name": "manuacl",
+    "url": "https://github.com/manuacl"
+  },
+  "metadata": {
+    "description": "Read-only infrastructure security auditing for Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "infra-audit",
+      "source": "./",
+      "description": "Audit a deployed server read-only: host, proxy, containers, datastore roles, DNS, CI pipeline and public HTTP surface. Evidence-backed report, ordered fix plan, guided remediation."
+    }
+  ]
+}

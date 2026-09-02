@@ -1,0 +1,15 @@
+# An audit's findings file is a map of a live system's weaknesses, and the
+# rendered report is the same map with the fixes spelled out. Never let one
+# ride along in a commit - keep them wherever the owner keeps documents.
+findings*.json
+findings*.json.bak
+*-audit.json
+*-audit.json.bak
+*.html
+
+# The schema example carries no real system's state.
+!**/findings.example.json
+
+# Byte-compiled generator scripts.
+__pycache__/
+*.pyc
