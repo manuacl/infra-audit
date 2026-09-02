@@ -279,6 +279,11 @@ cosmetic:
 
 - a script **cannot hallucinate** a firewall rule or a DNS record, and its
   output is comparable from one run to the next
+- a collector's **annotations must be conditional**: a hint printed on every
+  run is noise, and noise gets scrolled past. `collect-dns.sh` printed "a
+  DMARC policy of p=none monitors but enforces nothing" whatever the real
+  policy was, and a real `p=none` went unreported for it. Print a `FLAG:` line
+  only when its condition actually holds, so that seeing one means something
 - the owner can **read it before allowing it near their server**, and re-run
   it later **without any AI at all**
 - but a script **only finds what was coded into it**, which is exactly the

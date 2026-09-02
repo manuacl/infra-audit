@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Read-only infrastructure security auditing for Claude Code.",
-    "version": "0.2.1"
+    "version": "0.2.2"
   },
   "plugins": [
     {

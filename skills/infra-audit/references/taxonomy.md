@@ -178,11 +178,21 @@ missing or permissive SPF/DKIM/DMARC lets anyone send as you.
 
 **Check.** Enumerate every record and, for each `CNAME`, verify the target
 still resolves and is still yours. Then `dig TXT` for SPF, the DKIM selector,
-and `_dmarc`. Ordering rule for any later cleanup: **delete the DNS record
-first, wait for the TTL, then delete the resource.**
+and `_dmarc`, plus `dig CAA` on the apex. Ordering rule for any later cleanup:
+**delete the DNS record first, wait for the TTL, then delete the resource.**
+
+Two of these are absences rather than values, which is why they are missed:
+nothing in the zone announces that CAA is unset or that DMARC never asks for a
+report. `collect-dns.sh` raises a FLAG for each.
 
 **Ranking.** P1 for a live dangling CNAME. P3 for a `p=none` DMARC policy on a
-domain that sends mail.
+domain that sends mail, and P3 for an SPF ending in `?all` or `+all`, which
+authorizes the world. P4 for a missing CAA record, for a missing `rua=` on an
+otherwise sound DMARC, and for an SPF ending in `~all`: none of the three
+opens anything by itself, each removes a layer. Rank the missing CAA higher
+when the domain's TLS fronts anything holding a session - a fraudulently
+issued certificate is only useful to someone who can also route traffic, so it
+is a second-stage weakness, not an entry point.
 
 ---
 
