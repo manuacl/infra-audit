@@ -178,10 +178,20 @@ The report is a **state file plus a generator**, never hand-written HTML.
    It writes the HTML beside the JSON, opens it in the browser, and prints the
    progress line.
 
-**Set `order` deliberately.** It drives the action list, and it is not the
-same as severity: when the most severe fix is a migration, the quick low-risk
-surface reductions go first, because they protect sooner and cannot break
-anything. Say why in the report.
+**The action list runs most urgent first, and settled findings go last.**
+`order` drives it, and the section is titled "de la plus urgente a la moins",
+so the plan has to mean it. The worst open finding opens the list even when
+its fix is a migration: needing a window and a backup is a reason to schedule
+it, not a reason to bury it under P4s. Nothing downstream waits on it either,
+so the quick surface reductions below can still be taken as they come. Closed
+findings are archives, not actions: rank them below every open one.
+
+Deviating from that is allowed, but it must be argued in `meta.order_note`,
+which the generator renders in the report. An unexplained plan reads as a
+sorting bug - that is exactly how the first one was reported, by an owner
+looking at a P1 sitting at rank #10. `render-report.py` warns on both shapes:
+the list not opening on the worst open finding, and settled work ranked among
+live work.
 
 **`already_in_place` is not padding.** It is what stops the owner
 re-investing where the work is done, and it is what makes the findings

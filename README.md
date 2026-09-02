@@ -103,6 +103,12 @@ python3 scripts/merge-findings.py report.json new-pass.json
 python3 scripts/render-report.py  report.json
 ```
 
+Ids and ranks stay unique across passes, and a finding already in the report
+keeps its id: the owner refers to it by that id, in notes and in tickets, so
+only a newcomer is ever renamed. The generator also warns when the plan
+contradicts its own heading - the worst open finding not opening the list, or
+closed work ranked among live work.
+
 Status and notes survive; a finding previously marked fixed that reappears is
 flagged as a **regression**, which outranks a new finding. Findings absent
 from a new pass are never auto-closed - absence in one run is not proof of a
@@ -152,6 +158,15 @@ skills/infra-audit/
   scripts/render-report.py         findings.json -> HTML
   scripts/merge-findings.py        merge a new pass, keep the follow-up, flag regressions
 ```
+
+## Tests
+
+```bash
+python3 tests/test_merge_findings.py
+```
+
+No runner, no dependency. It covers the merge, which is the one piece that
+rewrites a file the owner has been annotating for weeks, and the plan lint.
 
 ## Contributing
 

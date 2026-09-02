@@ -139,6 +139,48 @@ def block(label, body, pre=False):
     return f'<div class="lab">{escape(label)}</div>{inner}'
 
 
+# A finding is live until it is fixed or knowingly accepted. "blocked" is
+# still an exposure, so it counts as open everywhere.
+ACTIVE = ("todo", "in_progress", "blocked")
+SETTLED = ("fixed", "accepted")
+
+
+def lint_plan(findings):
+    """Warnings when the action list contradicts its own heading.
+
+    The section is titled "de la plus urgente a la moins", so burying the worst
+    open finding under lighter ones, or ranking settled history above live
+    work, is a defect in the plan even when every rank is unique. This never
+    rewrites `order`: the plan belongs to whoever wrote it.
+    """
+    sev_rank = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
+    ordered = sorted(findings, key=lambda f: f.get("order", 999))
+    active = [f for f in ordered if f.get("status") in ACTIVE]
+    warnings = []
+
+    if active:
+        worst = min(sev_rank.get(f.get("severity", "P4"), 9) for f in active)
+        first = active[0]
+        if sev_rank.get(first.get("severity", "P4"), 9) > worst:
+            worst_f = next(f for f in active
+                           if sev_rank.get(f.get("severity", "P4"), 9) == worst)
+            warnings.append(
+                f"the worst open finding is {worst_f.get('id')} ({worst_f.get('severity')}) at "
+                f"rank #{worst_f.get('order')}, but the list opens on {first.get('id')} "
+                f"({first.get('severity')}). The action list is titled most-urgent-first: either "
+                f"move it up, or say why in meta.order_note - it renders in the report.")
+
+    settled_above = [f for f in ordered
+                     if f.get("status") in SETTLED and active
+                     and f.get("order", 999) < active[-1].get("order", 999)]
+    if len(settled_above) > 1:
+        warnings.append(
+            f"{len(settled_above)} settled findings are ranked among the open ones "
+            f"({', '.join(str(f.get('id')) for f in settled_above)}). Closed work is history: "
+            f"keeping it in the middle of the plan pushes live items down the page.")
+    return warnings
+
+
 def render(data, out_path):
     meta = data.get("meta", {})
     findings = list(data.get("findings", []))
@@ -162,7 +204,6 @@ def render(data, out_path):
     # Deliberately independent of progress: 8 items closed out of 10 still reads
     # critical while a P1 stands. An ACCEPTED P1 never turns the header green
     # either - a knowingly retained risk is still a live exposure.
-    ACTIVE = ("todo", "in_progress", "blocked")
     worst_open = min((sev_rank.get(f.get("severity", "P4"), 9)
                       for f in findings if f.get("status") in ACTIVE), default=9)
     worst_acc = min((sev_rank.get(f.get("severity", "P4"), 9)
@@ -186,6 +227,11 @@ def render(data, out_path):
     if driven_by_accepted and worst != 9:
         tag += " (ACCEPTE)"
         headline = "Le niveau est porté par un risque accepté, pas par un oubli"
+
+    order_note = escape(str(meta.get("order_note", ""))) or (
+        "Il ne suit pas toujours la gravité : quand la correction la plus grave est une "
+        "migration, les réductions de surface rapides passent devant, parce qu'elles protègent "
+        "plus tôt et sans risque de rupture.")
 
     residual = ""
     if driven_by_accepted and worst <= 1:
@@ -288,9 +334,7 @@ def render(data, out_path):
     <span class="pill p-bad">Bloqué</span>
   </div>
   <div class="box w"><h4 style="margin:0 0 8px">Ordre d'exécution</h4>
-  <p style="margin:0">Il ne suit pas toujours la gravité : quand la correction la plus grave est
-  une migration, les réductions de surface rapides passent devant, parce qu'elles protègent plus
-  tôt et sans risque de rupture.</p></div>
+  <p style="margin:0">{order_note}</p></div>
   {"".join(cards)}
 
   <h2 id="solide">Ce qui est déjà en place</h2>
@@ -350,6 +394,8 @@ def main():
     out, done, total, p1 = render(data, out)
     print(f"report: {out}")
     print(f"progress: {done}/{total} fixed, {p1} P1 still open")
+    for w in lint_plan(data.get("findings", [])):
+        print(f"plan: {w}", file=sys.stderr)
     if "--no-open" not in sys.argv:
         open_browser(out) or print("(no browser opener found, open the file manually)")
 
