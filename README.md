@@ -76,7 +76,7 @@ before it runs, and re-run them later without any AI at all.
 blinds you to everything else. The skill enumerates what actually exists -
 every port, vhost, container, credential, scheduled job - and interrogates
 each one ("what does this trust, and can it be forged?", "if I wanted in, what
-would I try first?"). Only then does it sweep the eleven attack classes in
+would I try first?"). Only then does it sweep the twelve attack classes in
 `references/taxonomy.md` as a completeness net. A finding that fits no
 category is still a finding, and the file says to add the category.
 
@@ -145,7 +145,7 @@ they age, and the file says to re-check before quoting them.
 .claude-plugin/marketplace.json    lets this repo be added as a marketplace
 skills/infra-audit/
   SKILL.md                         method: phases, guard-rails, traps
-  references/taxonomy.md           11 attack classes, severity rubric, false-positive killers
+  references/taxonomy.md           12 attack classes, severity rubric, false-positive killers
   references/compromised-host.md   incident-response mode
   references/findings.example.json report schema, worked example
   scripts/collect-host.sh          os, updates, firewall, ssh, listeners, containers, db roles

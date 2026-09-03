@@ -147,7 +147,7 @@ current advisories and known misconfigurations, and note the date you looked.
 
 ## Phase 2b - sweep the categories, then qualify
 
-`references/taxonomy.md` is the net: eleven attack classes, each with a
+`references/taxonomy.md` is the net: twelve attack classes, each with a
 read-only check and a ranking note. Sweep them all and say which came back
 empty. **A finding that fits no category is still a finding**: write it up and
 add the category to the file.

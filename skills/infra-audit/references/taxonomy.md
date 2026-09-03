@@ -258,6 +258,53 @@ every other finding: say so in the report's limits section.
 
 ---
 
+## 12. Monitoring and alerting that cannot report
+
+**Attack.** Not an attack either, and that is the point: it is what lets every
+other category go unnoticed for months. A monitor whose reporting path is
+broken produces exactly the same output as a healthy system - nothing. Worse
+than having no monitor, because someone believes they are covered.
+
+Both instances that produced this class were found by accident, not by an
+audit. A daily CSP digest posted with `curl -s` and no status check, against
+credentials that had never been set: the API answered `missing scopes`, the
+step exited 0, and the pipeline went green every day while the destination
+received nothing. And a nightly backup whose notification chain had a dead
+OAuth token, surfaced only as a `401` on a manual test send - so the *failure*
+mail would not have arrived either.
+
+**Check.** For each scheduled job that reports somewhere, answer two questions
+separately, because a job can pass the first and fail the second:
+
+1. does the job run and succeed? (timer/cron state, last exit status)
+2. **did its report actually arrive at the destination?** Read the destination
+   itself - the channel, the mailbox, the card, the dashboard - not the job's
+   exit code
+
+Then read the transport call: `curl` without `-f` or without a checked status
+code, a mail send whose result is discarded, a webhook whose response is not
+inspected. Any of those turns a failed report into a green run. Check too
+whether an empty or absent credential is guarded before the call rather than
+after: an unset secret is the commonest cause, and the least visible.
+
+Finally, ask what proves the job still runs at all. Alert-on-event with no
+heartbeat means silence is unfalsifiable: a dead script and a quiet system are
+the same observation.
+
+**Ranking.** P3 for a broken reporting path on its own. P2 when the mute
+monitor is the only thing watching something that would otherwise be a P1 or
+P2 finding - a backup, an intrusion signal, a certificate expiry - because the
+severity of what goes unwatched transfers to the thing that fails to watch it.
+P4 for an alert-on-event job with no heartbeat, where the path works today but
+its silence cannot be trusted tomorrow.
+
+**Do not** confuse this with alert fatigue, which is the opposite failure and
+also worth reporting: a job that emails on every run, or on background noise
+such as routine SSH scan attempts, trains its reader to ignore it. Both end in
+a report nobody acts on; only the cause differs.
+
+---
+
 ## Severity rubric
 
 Rank on blast radius and reachability, never on cleverness.
